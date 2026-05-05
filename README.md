@@ -420,6 +420,7 @@ When ready to scale, the natural evolution paths are:
 Building infrastructure, automation, and DevOps workflows  
 
 **Contact**
+
 [![GitHub](https://img.shields.io/badge/GitHub-%20Ali%20Ahmed-black?style=for-the-badge&logo=github)](https://github.com/jeffreyalie)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-%20Ali%20Ahmed-blue?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/ali-ahmed-261755252/)
 ---
