@@ -11,13 +11,9 @@ on:
       vm_name:
         description: "VM name ( e.g. dev01 / prod01 ) must match tfvars file, e.g. dev01.tfvars / prod01.tfvars"
         required: true
-      
-      confirm_destroy:
-        description: "Type 'yes' to confirm destroy"
-        required: true
 
 jobs:
-  destroy:
+  terraform:
     runs-on: ubuntu-latest
 
     # S3 credentials for the SeaweedFS backend. Terraform reads these from the
@@ -28,27 +24,9 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
       AWS_DEFAULT_REGION: us-east-1
 
-    # 🔐 Strongly recommended for prod safety
-    environment:
-      name: ${{ inputs.environment }}
-
-    defaults:
-      run:
-        working-directory: terraform
-
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
-
-      # -------------------------------------------------------------------
-      # Safety Check (Hard Gate)
-      # -------------------------------------------------------------------
-      - name: Confirm Destroy
-        run: |
-          if [ "${{ inputs.confirm_destroy }}" != "yes" ]; then
-            echo "::error:: Destroy not confirmed. Type 'yes' to proceed."
-            exit 1
-          fi
 
       # -------------------------------------------------------------------
       # Set + Validate Variables
@@ -66,24 +44,30 @@ jobs:
           fi
 
           echo "env=$ENV" >> $GITHUB_OUTPUT
+          echo "vm_name=$VM" >> $GITHUB_OUTPUT
+
+          echo "working_dir=terraform" >> $GITHUB_OUTPUT
           echo "tfvars_file=env/${ENV}/${VM}.tfvars" >> $GITHUB_OUTPUT
           echo "state_key=state/${ENV}/${VM}/terraform.tfstate" >> $GITHUB_OUTPUT
 
       # -------------------------------------------------------------------
-      # Safety confirmation (extra guard)
+      # Validate tfvars exists
       # -------------------------------------------------------------------
-      - name: Safety Check
+      - name: Validate tfvars exists
+        working-directory: ${{ steps.vars.outputs.working_dir }}
         run: |
-          echo "⚠️ YOU ARE ABOUT TO DESTROY:"
-          echo "Environment: ${{ steps.vars.outputs.env }}"
-          echo "VM: ${{ inputs.vm_name }}"
-          echo "State: ${{ steps.vars.outputs.state_key }}"
+          FILE="${{ steps.vars.outputs.tfvars_file }}"
+          if [ ! -f "$FILE" ]; then
+            echo "::error:: tfvars file not found: $FILE"
+            exit 1
+          fi
 
       # -------------------------------------------------------------------
-      # Setup Terraform
+      # Setup Terraform (use_lockfile below needs Terraform >= 1.10)
       # -------------------------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+
       # -------------------------------------------------------------------
       # Setup LXD certificates (optional if using password auth, but recommended for security)
       # Provider will automatically pick up certs from ~/.config/lxc/ if they exist, defined in workflow secrets LXD_CLIENT_CERT and LXD_CLIENT_KEY
@@ -97,7 +81,6 @@ jobs:
           printf "%s" "${{ secrets.LXD_CLIENT_KEY }}"  > ~/.config/lxc/client.key
 
           chmod 600 ~/.config/lxc/client.key
-          ls -l ~/.config/lxc/client.* || true
 
       # -------------------------------------------------------------------
       # Init (S3 backend on SeaweedFS)
@@ -128,15 +111,25 @@ jobs:
           terraform init -backend-config=backend.hcl
 
       # -------------------------------------------------------------------
+      # Validate Terraform config
+      # -------------------------------------------------------------------
+      - name: Terraform Validate
+        working-directory: ${{ steps.vars.outputs.working_dir }}
+        run: terraform validate
+
+
+      # -------------------------------------------------------------------
       # Terraform Destroy
       # -------------------------------------------------------------------
       - name: Terraform Destroy
+        working-directory: ${{ steps.vars.outputs.working_dir }}
+        # Set TF_VAR_ environment variables for Terraform from GitHub Secrets and Inputs as defined in variables.tf
         env:
           TF_VAR_lxd_address: ${{ secrets.LXD_ADDRESS }}
           TF_VAR_ansible_ssh_public_key: ${{ secrets.ANSIBLE_SSH_PUBLIC_KEY }}
-          # TF_VAR_lxd_trust_password: ${{ secrets.LXD_TRUST_PASSWORD }} --- IGNORE if using lxd certificate ---
-          TF_VAR_vm_name: ${{ inputs.vm_name }}
-          TF_VAR_environment: ${{ inputs.environment }}
+          # TF_VAR_environment: ${{ github.event.inputs.environment }} --- IGNORE  if using lxd certificate ---
+          TF_VAR_environment: ${{ steps.vars.outputs.env }}
+          TF_VAR_vm_name: ${{ steps.vars.outputs.vm_name }}
         run: |
-          terraform destroy -auto-approve \
+          terraform destroy \
             -var-file="${{ steps.vars.outputs.tfvars_file }}"
