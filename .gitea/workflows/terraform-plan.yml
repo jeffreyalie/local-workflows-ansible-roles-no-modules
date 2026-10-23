@@ -121,7 +121,7 @@ jobs:
       # Plan
       # -----------------------------
       - name: Terraform Plan
-        working-directory: ${{ steps.vars.outputs.working_dir }}
+        working-directory: terraform
         # Set TF_VAR_ environment variables for Terraform from GitHub Secrets and Inputs as defined in variables.tf
         env:
           TF_VAR_lxd_address: ${{ secrets.LXD_ADDRESS }}

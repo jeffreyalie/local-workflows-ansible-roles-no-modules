@@ -42,7 +42,7 @@ This repository implements a complete infrastructure-as-code solution that:
 | Ubuntu 24.04 host | LXD installed via snap, API at `https://localhost:8443` |
 | Gitea | Running at `http://gitea.local`, `Infra` org |
 | Gitea Act Runner | Docker-based runner registered to the `Infra` org |
-| MinIO | S3-compatible state backend at `http://10.248.42.22:9000` |
+| Seaweed | S3-compatible state backend at `http://10.248.42.22:9000` |
 | Terraform ≥ 1.5 | Installed on the runner |
 | LXD TLS certificates | Client cert/key for runner-to-LXD authentication |
 
