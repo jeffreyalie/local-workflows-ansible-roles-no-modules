@@ -158,9 +158,9 @@ Configure all secrets at the **Gitea org level**: `Infra` → Settings → Secre
 | `LXD_ADDRESS` | Secret | Terraform | LXD API host (e.g. `192.168.x.x`) |
 | `LXD_CLIENT_CERT` | Secret | Terraform | TLS client certificate (PEM) |
 | `LXD_CLIENT_KEY` | Secret | Terraform | TLS client key (PEM) |
-| `MINIO_ENDPOINT` | Secret | Terraform | MinIO S3 API URL |
-| `MINIO_ACCESS_KEY` | Secret | Terraform | MinIO access key |
-| `MINIO_SECRET_KEY` | Secret | Terraform | MinIO secret key |
+| `SEAWEDD_ENDPOINT` | Secret | Terraform | Seaweed S3 API URL |
+| `SEAWEDD_ACCESS_KEY` | Secret | Terraform | Seaweed access key |
+| `SEAWEDD_SECRET_KEY` | Secret | Terraform | Seaweed secret key |
 | `ANSIBLE_SSH_PUBLIC_KEY` | Secret | Terraform | Injected into VM via cloud-init |
 | `ANSIBLE_SSH_PRIVATE_KEY` | Secret | Ansible | Used by runner to SSH into VM |
 
@@ -194,7 +194,7 @@ Steps:
 1. Validates environment input (only `dev` / `prod` allowed)
 2. Resolves `tfvars_file` and `state_key` paths from inputs
 3. Writes LXD TLS certs to `~/.config/lxc/`
-4. `terraform init` against MinIO backend
+4. `terraform init` against Seaweed backend
 5. `terraform plan` with the resolved `.tfvars` file
 
 ---
@@ -244,7 +244,7 @@ Inputs:
 
 Steps:
 1. Validates environment
-2. Inits Terraform against MinIO to read existing state
+2. Inits Terraform against Seaweed to read existing state
 3. Reads VM IP from `terraform output -raw vm_ip`
 4. Polls SSH port (up to 20 × 10s) until the VM is reachable
 5. Writes `ANSIBLE_SSH_PRIVATE_KEY` to `~/.ssh/id_rsa`
@@ -271,7 +271,7 @@ Both `os_type` and `vm_name` are supplied by the `.tfvars` file; `environment` c
 
 ### State Backend Path
 
-State is stored in MinIO at:
+State is stored in Seaweed at:
 ```
 s3://terraform-state/state/<environment>/<vm_name>/terraform.tfstate
 ```
@@ -361,7 +361,7 @@ Both roles live locally under `ansible/roles/`. There is no external Galaxy depe
 cp terraform/env/dev/dev01.tfvars terraform/terraform.tfvars
 # Add lxd_address and ansible_ssh_public_key
 
-# 2. Init with MinIO backend
+# 2. Init with Seaweed backend
 cd terraform
 terraform init \
   -backend-config="endpoint=http://10.248.42.22:9000" \
