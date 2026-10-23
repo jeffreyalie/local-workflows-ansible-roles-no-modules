@@ -127,8 +127,8 @@ jobs:
           TF_VAR_lxd_address: ${{ secrets.LXD_ADDRESS }}
           TF_VAR_ansible_ssh_public_key: ${{ secrets.ANSIBLE_SSH_PUBLIC_KEY }}
           # TF_VAR_lxd_trust_password: ${{ secrets.LXD_TRUST_PASSWORD }}  --- IGNORE if using lxd certificate  ---
-          TF_VAR_vm_name: ${{ inputs.vm_name }}
-          TF_VAR_environment: ${{ inputs.environment }}
+          TF_VAR_environment: ${{ github.event.inputs.environment }}
+          TF_VAR_vm_name: ${{ github.event.inputs.vm_name }}
         run: |
           terraform plan \
             -var-file="${{ steps.vars.outputs.tfvars_file }}"

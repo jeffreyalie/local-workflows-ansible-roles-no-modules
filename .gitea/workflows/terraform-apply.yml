@@ -24,9 +24,6 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
       AWS_DEFAULT_REGION: us-east-1
 
-    # environment:
-    #   name: ${{ inputs.environment }}
-
     defaults:
       run:
         working-directory: terraform
@@ -71,7 +68,6 @@ jobs:
           printf "%s" "${{ secrets.LXD_CLIENT_KEY }}"  > ~/.config/lxc/client.key
 
           chmod 600 ~/.config/lxc/client.key
-          ls -l ~/.config/lxc/client.* || true
 
       # -------------------------------------------------------------------
       # Init (S3 backend on SeaweedFS)
@@ -109,8 +105,8 @@ jobs:
           TF_VAR_lxd_address: ${{ secrets.LXD_ADDRESS }}
           TF_VAR_ansible_ssh_public_key: ${{ secrets.ANSIBLE_SSH_PUBLIC_KEY }}
           # TF_VAR_lxd_trust_password: ${{ secrets.LXD_TRUST_PASSWORD }} --- IGNORE if using lxd certificate ---
-          TF_VAR_vm_name: ${{ inputs.vm_name }}
-          TF_VAR_environment: ${{ inputs.environment }}
+          TF_VAR_environment: ${{ github.event.inputs.environment }}
+          TF_VAR_vm_name: ${{ github.event.inputs.vm_name }}
         run: |
           terraform apply -auto-approve \
             -var-file="${{ steps.vars.outputs.tfvars_file }}"
