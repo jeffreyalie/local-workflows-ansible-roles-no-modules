@@ -293,7 +293,7 @@ Each VM has a dedicated `.tfvars` file under `terraform/env/<env>/`. Sensitive v
 
 Example (`dev02.tfvars`):
 ```hcl
-image        = "ubuntu-24-04-vm"
+image        = "buntu-26.04-vm"
 os_type      = "ubuntu-vm"
 network      = "lxdbr0"
 storage_pool = "default"

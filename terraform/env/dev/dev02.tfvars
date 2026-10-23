@@ -9,7 +9,7 @@
 # Paste your ansible user's SSH public key here
 # ansible_ssh_public_key = "ssh-ed25519 AAAA... user@host"
 
-image        = "ubuntu-24-04-vm"
+image        = "buntu-26.04-vm"
 os_type      = "ubuntu-vm"
 network      = "lxdbr0"
 storage_pool = "default"
