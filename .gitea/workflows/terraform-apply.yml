@@ -49,6 +49,18 @@ jobs:
           echo "tfvars_file=env/${ENV}/${VM}.tfvars" >> $GITHUB_OUTPUT
           echo "state_key=state/${ENV}/${VM}/terraform.tfstate" >> $GITHUB_OUTPUT
 
+      # -------------------------------------------------------------------
+      # Validate tfvars exists
+      # -------------------------------------------------------------------
+      - name: Validate tfvars exists
+        working-directory: ${{ steps.vars.outputs.working_dir }}
+        run: |
+          FILE="${{ steps.vars.outputs.tfvars_file }}"
+          if [ ! -f "$FILE" ]; then
+            echo "::error:: tfvars file not found: $FILE"
+            exit 1
+          fi
+
       # -----------------------------
       # Setup Terraform
       # -----------------------------
@@ -96,6 +108,13 @@ jobs:
           EOF
 
           terraform init -backend-config=backend.hcl
+
+      # -------------------------------------------------------------------
+      # Validate Terraform config
+      # -------------------------------------------------------------------
+      - name: Terraform Validate
+        working-directory: ${{ steps.vars.outputs.working_dir }}
+        run: terraform validate
 
       # -----------------------------
       # Apply
