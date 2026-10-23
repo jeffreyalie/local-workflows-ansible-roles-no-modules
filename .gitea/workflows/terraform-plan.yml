@@ -54,7 +54,6 @@ jobs:
       # Validate tfvars exists
       # -------------------------------------------------------------------
       - name: Validate tfvars exists
-        working-directory: ${{ steps.vars.outputs.working_dir }}
         run: |
           FILE="${{ steps.vars.outputs.tfvars_file }}"
           if [ ! -f "$FILE" ]; then
@@ -89,7 +88,6 @@ jobs:
       # secret keys come from the job-level AWS_* environment variables.
       # -------------------------------------------------------------------
       - name: Terraform Init
-        working-directory: ${{ steps.vars.outputs.working_dir }}
         env:
           S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
         run: |
@@ -115,7 +113,6 @@ jobs:
       # Validate Terraform config
       # -------------------------------------------------------------------
       - name: Terraform Validate
-        working-directory: ${{ steps.vars.outputs.working_dir }}
         run: terraform validate
 
       # -----------------------------
@@ -127,7 +124,7 @@ jobs:
           TF_VAR_ansible_ssh_public_key: ${{ secrets.ANSIBLE_SSH_PUBLIC_KEY }}
           # TF_VAR_lxd_trust_password: ${{ secrets.LXD_TRUST_PASSWORD }}  --- IGNORE if using lxd certificate  ---
           TF_VAR_vm_name: ${{ inputs.vm_name }}
-          TF_VAR_environment: ${{ inputs.environment }}
+          TF_VAR_environment: ${{ steps.vars.outputs.env }}
         run: |
           terraform plan \
             -var-file="${{ steps.vars.outputs.tfvars_file }}"
