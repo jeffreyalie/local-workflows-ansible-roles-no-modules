@@ -13,7 +13,7 @@ on:
         required: true
 
 jobs:
-  terraform:
+  plan:
     runs-on: ubuntu-latest
 
     defaults:
@@ -32,39 +32,23 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # -------------------------------------------------------------------
-      # Set + Validate Variables
-      # -------------------------------------------------------------------
+      # -----------------------------
+      # Set Variables
+      # -----------------------------
       - name: Set Variables
         id: vars
         run: |
           ENV=$(echo "${{ inputs.environment }}" | tr '[:upper:]' '[:lower:]')
           VM="${{ inputs.vm_name }}"
 
-          # Validate environment
           if [ "$ENV" != "dev" ] && [ "$ENV" != "prod" ]; then
-            echo "::error:: Invalid environment: $ENV (allowed: dev, prod)"
+            echo "::error:: Invalid environment: $ENV"
             exit 1
           fi
 
           echo "env=$ENV" >> $GITHUB_OUTPUT
-          echo "vm_name=$VM" >> $GITHUB_OUTPUT
-
-          echo "working_dir=terraform/env/${ENV}" >> $GITHUB_OUTPUT
-          echo "tfvars_file=${VM}.tfvars" >> $GITHUB_OUTPUT
+          echo "tfvars_file=env/${ENV}/${VM}.tfvars" >> $GITHUB_OUTPUT
           echo "state_key=state/${ENV}/${VM}/terraform.tfstate" >> $GITHUB_OUTPUT
-
-      # -------------------------------------------------------------------
-      # Validate tfvars exists
-      # -------------------------------------------------------------------
-      - name: Validate tfvars exists
-        working-directory: ${{ steps.vars.outputs.working_dir }}
-        run: |
-          FILE="${{ steps.vars.outputs.tfvars_file }}"
-          if [ ! -f "$FILE" ]; then
-            echo "::error:: tfvars file not found: $FILE"
-            exit 1
-          fi
 
       # -----------------------------
       # Setup Terraform
@@ -85,6 +69,7 @@ jobs:
           printf "%s" "${{ secrets.LXD_CLIENT_KEY }}"  > ~/.config/lxc/client.key
 
           chmod 600 ~/.config/lxc/client.key
+          ls -l ~/.config/lxc/client.* || true
 
       # -------------------------------------------------------------------
       # Init (S3 backend on SeaweedFS)
@@ -113,25 +98,16 @@ jobs:
           EOF
 
           terraform init -backend-config=backend.hcl
-      
-      # -------------------------------------------------------------------
-      # Validate Terraform config
-      # -------------------------------------------------------------------
-      - name: Terraform Validate
-        working-directory: ${{ steps.vars.outputs.working_dir }}
-        run: terraform validate
-
       # -----------------------------
       # Plan
       # -----------------------------
       - name: Terraform Plan
-        
         env:
           TF_VAR_lxd_address: ${{ secrets.LXD_ADDRESS }}
           TF_VAR_ansible_ssh_public_key: ${{ secrets.ANSIBLE_SSH_PUBLIC_KEY }}
           # TF_VAR_lxd_trust_password: ${{ secrets.LXD_TRUST_PASSWORD }}  --- IGNORE if using lxd certificate  ---
-          TF_VAR_environment: ${{ github.event.inputs.environment }}
-          TF_VAR_vm_name: ${{ github.event.inputs.vm_name }}
+          TF_VAR_vm_name: ${{ inputs.vm_name }}
+          TF_VAR_environment: ${{ inputs.environment }}
         run: |
           terraform plan \
             -var-file="${{ steps.vars.outputs.tfvars_file }}"
