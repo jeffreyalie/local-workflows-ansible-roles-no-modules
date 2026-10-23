@@ -1,83 +1,72 @@
-name: "Ansible Deploy (Real VM)"
+name: "Ansible Deploy"
 
 on:
   workflow_dispatch:
     inputs:
       environment:
-        description: "Environment (dev/prod)"
+        description: "Environment (dev/prod), must match folder name, e.g. terraform/env/dev"
         required: true
-
+        type: string
       vm_name:
-        description: "VM name (e.g. dev01 / prod01)"
+        description: "VM name (e.g. dev01 / prod01), must match tfvars file"
         required: true
+        type: string
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
-    # S3 credentials for the SeaweedFS backend. Terraform reads these from the
-    # environment, so they are available to both `init` and `plan` and are never
-    # written into .terraform/ on disk.
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
       AWS_DEFAULT_REGION: us-east-1
-      TF_VAR_lxd_address: ${{ secrets.LXD_ADDRESS }}
-      TF_VAR_ansible_ssh_public_key: ${{ secrets.ANSIBLE_SSH_PUBLIC_KEY }}
+      TF_INPUT: "0"
 
     steps:
-      # --------------------------------------------------
-      # Checkout
-      # --------------------------------------------------
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # --------------------------------------------------
-      # Validate Environment
-      # --------------------------------------------------
-      - name: Validate Environment
+      # -------------------------------------------------------------------
+      # Set + Validate Variables
+      # -------------------------------------------------------------------
+      - name: Set Variables
+        id: vars
+        env:
+          IN_ENV: ${{ inputs.environment }}
+          IN_VM: ${{ inputs.vm_name }}
         run: |
-          ENV="${{ inputs.environment }}"
+          ENV=$(echo "$IN_ENV" | tr '[:upper:]' '[:lower:]')
+          VM="$IN_VM"
 
           if [ "$ENV" != "dev" ] && [ "$ENV" != "prod" ]; then
-            echo "::error:: Invalid environment: $ENV (must be dev or prod)"
+            echo "::error:: Invalid environment: $ENV (allowed: dev, prod)"
             exit 1
           fi
 
-      # --------------------------------------------------
-      # Install dependencies
-      # --------------------------------------------------
+          if ! [[ "$VM" =~ ^[a-z0-9-]+$ ]]; then
+            echo "::error:: Invalid vm_name: $VM"
+            exit 1
+          fi
+
+          echo "env=$ENV" >> $GITHUB_OUTPUT
+          echo "vm_name=$VM" >> $GITHUB_OUTPUT
+          echo "working_dir=terraform" >> $GITHUB_OUTPUT
+          echo "state_key=state/${ENV}/${VM}/terraform.tfstate" >> $GITHUB_OUTPUT
+
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ansible netcat-openbsd
 
-      # --------------------------------------------------
-      # Set Variables
-      # --------------------------------------------------
-      - name: Set Variables
-        id: vars
-        run: |
-          ENV="${{ inputs.environment }}"
-          VM="${{ inputs.vm_name }}"
-
-          echo "env=$ENV" >> $GITHUB_OUTPUT
-          echo "vm_name=$VM" >> $GITHUB_OUTPUT
-
-          echo "working_dir=terraform/env/${ENV}" >> $GITHUB_OUTPUT
-          echo "state_key=state/${ENV}/${VM}/terraform.tfstate" >> $GITHUB_OUTPUT
-
-      # --------------------------------------------------
-      # Setup Terraform
-      # --------------------------------------------------
+      # -------------------------------------------------------------------
+      # Setup Terraform (wrapper off so `terraform output` returns clean text)
+      # -------------------------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
-      # -------------------------------------------------------------------
-      # Init (S3 backend on SeaweedFS)
-      # Non-secret settings go in a generated backend.hcl file. The access and
-      # secret keys come from the job-level AWS_* environment variables.
-      # -------------------------------------------------------------------
       - name: Terraform Init
         working-directory: ${{ steps.vars.outputs.working_dir }}
         env:
@@ -101,55 +90,61 @@ jobs:
 
           terraform init -backend-config=backend.hcl
 
-      # --------------------------------------------------
+      # -------------------------------------------------------------------
       # Get VM IP from Terraform state
-      # --------------------------------------------------
+      # -------------------------------------------------------------------
       - name: Get VM IP
         id: tfout
-        working-directory: terraform
+        working-directory: ${{ steps.vars.outputs.working_dir }}
         run: |
           IP=$(terraform output -raw vm_ip)
+
+          if ! [[ "$IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error:: vm_ip is empty or invalid: '$IP' (has terraform apply run for this VM?)"
+            exit 1
+          fi
+
           echo "vm_ip=$IP" >> $GITHUB_OUTPUT
 
-      # --------------------------------------------------
-      # Wait for SSH
-      # --------------------------------------------------
       - name: Wait for SSH
+        env:
+          VM_IP: ${{ steps.tfout.outputs.vm_ip }}
         run: |
-          for i in {1..20}; do
-            nc -z ${{ steps.tfout.outputs.vm_ip }} 22 && exit 0
-            echo "Waiting for SSH..."
+          for i in {1..30}; do
+            if nc -z -w 5 "$VM_IP" 22; then
+              echo "SSH is up"
+              exit 0
+            fi
+            echo "Waiting for SSH ($i/30)..."
             sleep 10
           done
-
-          echo "::error:: SSH not ready"
+          echo "::error:: SSH not ready on $VM_IP"
           exit 1
 
-      # --------------------------------------------------
-      # Setup SSH Key
-      # --------------------------------------------------
       - name: Setup SSH Key
+        env:
+          SSH_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-
-          echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-
-          chmod 600 ~/.ssh/id_rsa
           chmod 700 ~/.ssh
+          printf "%s\n" "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
-      # --------------------------------------------------
-      # Create Inventory
-      # --------------------------------------------------
       - name: Create Inventory
+        env:
+          VM_IP: ${{ steps.tfout.outputs.vm_ip }}
         run: |
-          echo "[vm]" > inventory.ini
-          echo "${{ steps.tfout.outputs.vm_ip }} ansible_user=ansible ansible_ssh_private_key_file=$HOME/.ssh/id_rsa" >> inventory.ini
+          cat > inventory.ini <<EOF
+          [vm]
+          ${VM_IP} ansible_user=ansible ansible_ssh_private_key_file=$HOME/.ssh/id_rsa
+          EOF
 
-      # --------------------------------------------------
-      # Run Ansible
-      # --------------------------------------------------
       - name: Ansible Deploy
-        run: |
-          ANSIBLE_HOST_KEY_CHECKING=False \
-          ansible-playbook -i inventory.ini ansible/playbook.yml
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+        run: ansible-playbook -i inventory.ini ansible/playbook.yml
+
+      - name: Cleanup SSH Key
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
         
