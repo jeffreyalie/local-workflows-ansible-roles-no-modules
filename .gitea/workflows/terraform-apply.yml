@@ -121,6 +121,7 @@ jobs:
       # Apply
       # -----------------------------
       - name: Terraform Apply
+        working-directory: ${{ steps.vars.outputs.working_dir }}
         env:
           TF_VAR_lxd_address: ${{ secrets.LXD_ADDRESS }}
           TF_VAR_ansible_ssh_public_key: ${{ secrets.ANSIBLE_SSH_PUBLIC_KEY }}
