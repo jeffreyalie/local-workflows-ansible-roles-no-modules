@@ -30,7 +30,7 @@ This repository implements a complete infrastructure-as-code solution that:
 - Provisions Ubuntu 24.04 VMs on LXD using Terraform (flat, no modules)
 - Configures VMs with cloud-init for automated setup
 - Deploys applications via Ansible playbooks and local roles
-- Manages environments (dev/prod) with separate state management per VM in MinIO
+- Manages environments (dev/prod) with separate state management per VM in Seaweed
 - Provides CI/CD automation through local Gitea Actions workflows
 
 ---
@@ -89,7 +89,7 @@ This repository implements a complete infrastructure-as-code solution that:
              Terraform│                           │Ansible
                       ▼                           ▼
               ┌─────────────────┐           ┌─────────────────┐
-              │      MinIO      │           │   Target VM     │
+              │     Seaweed     │           │   Target VM     │
               │    backend s3   │           │  (Ubuntu 24.04) │
               │    (TF state)   │           │  ansible user   │
               └─────────────────┘           └─────────────────┘
