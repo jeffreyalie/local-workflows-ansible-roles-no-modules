@@ -22,8 +22,6 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
       AWS_DEFAULT_REGION: us-east-1
-
-    env:
       TF_VAR_lxd_address: ${{ secrets.LXD_ADDRESS }}
       TF_VAR_ansible_ssh_public_key: ${{ secrets.ANSIBLE_SSH_PUBLIC_KEY }}
 
