@@ -24,8 +24,8 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
       AWS_DEFAULT_REGION: us-east-1
 
-    environment:
-      name: ${{ inputs.environment }}
+    # environment:
+    #   name: ${{ inputs.environment }}
 
     defaults:
       run:
