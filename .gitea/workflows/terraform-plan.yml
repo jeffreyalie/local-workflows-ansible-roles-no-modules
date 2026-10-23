@@ -54,7 +54,7 @@ jobs:
       # Validate tfvars exists
       # -------------------------------------------------------------------
       - name: Validate tfvars exists
-        working-directory: terraform
+        working-directory: ${{ steps.vars.outputs.working_dir }}
         run: |
           FILE="${{ steps.vars.outputs.tfvars_file }}"
           if [ ! -f "$FILE" ]; then
