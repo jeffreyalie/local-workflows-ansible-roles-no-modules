@@ -13,12 +13,8 @@ on:
         required: true
 
 jobs:
-  plan:
+  terraform:
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: terraform
 
     # S3 credentials for the SeaweedFS backend. Terraform reads these from the
     # environment, so they are available to both `init` and `plan` and are never
@@ -32,29 +28,33 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # -----------------------------
-      # Set Variables
-      # -----------------------------
+      # -------------------------------------------------------------------
+      # Set + Validate Variables
+      # -------------------------------------------------------------------
       - name: Set Variables
         id: vars
         run: |
           ENV=$(echo "${{ inputs.environment }}" | tr '[:upper:]' '[:lower:]')
           VM="${{ inputs.vm_name }}"
 
+          # Validate environment
           if [ "$ENV" != "dev" ] && [ "$ENV" != "prod" ]; then
-            echo "::error:: Invalid environment: $ENV"
+            echo "::error:: Invalid environment: $ENV (allowed: dev, prod)"
             exit 1
           fi
 
           echo "env=$ENV" >> $GITHUB_OUTPUT
-          echo "tfvars_file=env/${ENV}/${VM}.tfvars" >> $GITHUB_OUTPUT
+          echo "vm_name=$VM" >> $GITHUB_OUTPUT
+
+          echo "working_dir=terraform/env/${ENV}" >> $GITHUB_OUTPUT
+          echo "tfvars_file=${VM}.tfvars" >> $GITHUB_OUTPUT
           echo "state_key=state/${ENV}/${VM}/terraform.tfstate" >> $GITHUB_OUTPUT
 
       # -------------------------------------------------------------------
       # Validate tfvars exists
       # -------------------------------------------------------------------
       - name: Validate tfvars exists
-        working-directory: terraform
+        working-directory: ${{ steps.vars.outputs.working_dir }}
         run: |
           FILE="${{ steps.vars.outputs.tfvars_file }}"
           if [ ! -f "$FILE" ]; then
@@ -62,9 +62,9 @@ jobs:
             exit 1
           fi
 
-      # -----------------------------
-      # Setup Terraform
-      # -----------------------------
+      # -------------------------------------------------------------------
+      # Setup Terraform (use_lockfile below needs Terraform >= 1.10)
+      # -------------------------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -81,7 +81,6 @@ jobs:
           printf "%s" "${{ secrets.LXD_CLIENT_KEY }}"  > ~/.config/lxc/client.key
 
           chmod 600 ~/.config/lxc/client.key
-          ls -l ~/.config/lxc/client.* || true
 
       # -------------------------------------------------------------------
       # Init (S3 backend on SeaweedFS)
@@ -89,6 +88,7 @@ jobs:
       # secret keys come from the job-level AWS_* environment variables.
       # -------------------------------------------------------------------
       - name: Terraform Init
+        working-directory: ${{ steps.vars.outputs.working_dir }}
         env:
           S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
         run: |
@@ -114,18 +114,21 @@ jobs:
       # Validate Terraform config
       # -------------------------------------------------------------------
       - name: Terraform Validate
+        working-directory: ${{ steps.vars.outputs.working_dir }}
         run: terraform validate
 
-      # -----------------------------
+      # -------------------------------------------------------------------
       # Plan
-      # -----------------------------
+      # -------------------------------------------------------------------
       - name: Terraform Plan
+        working-directory: ${{ steps.vars.outputs.working_dir }}
+        # Set TF_VAR_ environment variables for Terraform from GitHub Secrets and Inputs as defined in variables.tf
         env:
           TF_VAR_lxd_address: ${{ secrets.LXD_ADDRESS }}
           TF_VAR_ansible_ssh_public_key: ${{ secrets.ANSIBLE_SSH_PUBLIC_KEY }}
-          # TF_VAR_lxd_trust_password: ${{ secrets.LXD_TRUST_PASSWORD }}  --- IGNORE if using lxd certificate  ---
-          TF_VAR_vm_name: ${{ inputs.vm_name }}
-          TF_VAR_environment: ${{ steps.vars.outputs.env }}
+          # TF_VAR_environment: ${{ github.event.inputs.environment }} --- IGNORE  if using lxd certificate ---
+          TF_VAR_environment: ${{ github.event.inputs.environment }}
+          TF_VAR_vm_name: ${{ github.event.inputs.vm_name }}
         run: |
           terraform plan \
             -var-file="${{ steps.vars.outputs.tfvars_file }}"
