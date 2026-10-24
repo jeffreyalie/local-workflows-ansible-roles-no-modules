@@ -104,9 +104,9 @@ All secrets are configured at Gitea org level (Infra org):
 - `LXD_ADDRESS`: LXD API host address
 - `LXD_CLIENT_CERT`: TLS client certificate for LXD authentication
 - `LXD_CLIENT_KEY`: TLS client key for LXD authentication  
-- `SEAWEDD_ENDPOINT`: Seaweed S3 API URL for state backend
-- `SEAWEDD_ACCESS_KEY`: Seaweed access key
-- `SEAWEDD_SECRET_KEY`: Seaweed secret key
+- `S3_ENDPOINT`: Seaweed S3 API URL for state backend
+- `S3_ACCESS_KEY`: Seaweed access key
+- `S3_SECRET_KEY`: Seaweed secret key
 - `ANSIBLE_SSH_PUBLIC_KEY`: Injected into VM via cloud-init
 - `ANSIBLE_SSH_PRIVATE_KEY`: Used by runner to SSH into VM
 
@@ -118,3 +118,19 @@ Examples:
 - `prod-ubuntu-vm-prod02`
 
 State is stored in Seaweed at path: `s3://terraform-state/state/<environment>/<vm_name>/terraform.tfstate`
+
+## S3 Backend Configuration
+
+The Terraform state is managed using a remote backend in SeaweedFS (S3-compatible storage). The following variables are used for the S3 backend configuration:
+
+- `S3_ENDPOINT`: The endpoint URL for the SeaweedFS S3 API
+- `S3_ACCESS_KEY`: Access key for authenticating with SeaweedFS
+- `S3_SECRET_KEY`: Secret key for authenticating with SeaweedFS
+
+These secrets are used in the Terraform workflows to initialize the backend with the following configuration:
+- `bucket = "tfstate"`
+- `key = "state/<environment>/<vm_name>/terraform.tfstate"`
+- `region = "us-east-1"`
+- `use_path_style = true`
+- `skip_credentials_validation = true`
+- And other S3-specific settings for compatibility with SeaweedFS

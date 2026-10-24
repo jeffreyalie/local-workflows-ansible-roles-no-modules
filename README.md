@@ -158,9 +158,9 @@ Configure all secrets at the **Gitea org level**: `Infra` → Settings → Secre
 | `LXD_ADDRESS` | Secret | Terraform | LXD API host (e.g. `192.168.x.x`) |
 | `LXD_CLIENT_CERT` | Secret | Terraform | TLS client certificate (PEM) |
 | `LXD_CLIENT_KEY` | Secret | Terraform | TLS client key (PEM) |
-| `SEAWEDD_ENDPOINT` | Secret | Terraform | Seaweed S3 API URL |
-| `SEAWEDD_ACCESS_KEY` | Secret | Terraform | Seaweed access key |
-| `SEAWEDD_SECRET_KEY` | Secret | Terraform | Seaweed secret key |
+| `S3_ENDPOINT` | Secret | Terraform | Seaweed S3 API URL for state backend |
+| `S3_ACCESS_KEY` | Secret | Terraform | Seaweed access key for state backend |
+| `S3_SECRET_KEY` | Secret | Terraform | Seaweed secret key for state backend |
 | `ANSIBLE_SSH_PUBLIC_KEY` | Secret | Terraform | Injected into VM via cloud-init |
 | `ANSIBLE_SSH_PRIVATE_KEY` | Secret | Ansible | Used by runner to SSH into VM |
 
