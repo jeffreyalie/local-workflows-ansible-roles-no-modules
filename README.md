@@ -1,4 +1,4 @@
-# LXD Ubuntu VM — Terraform + Ansible + Gitea Actions
+#                             VM Deployment
 
 Deploy Ubuntu 24.04 virtual machines on LXD via Terraform (flat, no modules), configure them with Ansible roles, all driven by local Gitea CI/CD workflows.
 
@@ -6,20 +6,23 @@ Deploy Ubuntu 24.04 virtual machines on LXD via Terraform (flat, no modules), co
 
 ## Table of Contents
 
-- [Summary](#summary)
-- [Prerequisites](#prerequisites)
-- [Quick Steps to Deploy a VM](#quick-steps-to-deploy-a-vm)
-- [Architecture Overview](#architecture-overview---infrastrucutre---gha-workflow---secrets-workflow)
-- [Repository Structure](#repository-structure)
-- [Secrets & Variables](#secrets--variables)
-- [Workflows](#workflows)
-- [Terraform: Resource Model](#terraform-resource-model)
-- [Ansible: Playbook & Roles](#ansible-playbook--roles)
-- [End-to-End Deployment Flow](#end-to-end-deployment-flow)
-- [Local Usage](#local-usage)
-- [Destroying a VM](#destroying-a-vm)
-- [Design Notes](#design-notes)
-- [Created and Maintained By](#-infrastructure-created-and-maintained-by)
+Overview
+* [Summary](#summary)
+* [Folder Structure](#folder-structure)
+* [Infrastructure Archtecture - GHA - terraform - ansible - LXD - seaweed (S3) - Org level secrets](#infrastructure-archtecture---gha---terraform---ansible---lxd---seaweed-s3---org-level-secrets)
+
+Details
+* [Prerequisites](#prerequisites)
+* [Quick Steps to Deploy a VM](#quick-steps-to-deploy-a-vm)
+* [Secrets & Variables](#secrets--variables)
+* [Workflows](#workflows)
+* [Terraform: Resource Model](#terraform-resource-model)
+* [Ansible: Playbook & Roles](#ansible-playbook--roles)
+* [End-to-End Deployment Flow](#end-to-end-deployment-flow)
+* [Local Usage](#local-usage)
+* [Destroying a VM](#destroying-a-vm)
+* [Design Notes](#design-notes)
+* [Created and Maintained By](#-infrastructure-created-and-maintained-by)
 
 ---
 
@@ -27,55 +30,49 @@ Deploy Ubuntu 24.04 virtual machines on LXD via Terraform (flat, no modules), co
 
 This repository implements a complete infrastructure-as-code solution that:
 
-- Provisions Ubuntu 24.04 VMs on LXD using Terraform (flat, no modules)
+- Provisions Ubuntu 26.04 VMs on LXD using Terraform (flat, no modules)
 - Configures VMs with cloud-init for automated setup
 - Deploys applications via Ansible playbooks and local roles
 - Manages environments (dev/prod) with separate state management per VM in Seaweed
 - Provides CI/CD automation through local Gitea Actions workflows
 
 ---
+## Folder Structure
 
-## Prerequisites
+```.
+├── .gitea/
+│   └── workflows/
+│       ├── terraform-check.yml     # fmt + validate + tflint (PR trigger)
+│       ├── terraform-plan.yml      # plan only (manual trigger)
+│       ├── terraform-apply.yml     # apply (manual trigger)
+│       ├── terraform-destroy.yml   # destroy with confirmation gate (manual trigger)
+│       ├── ansible-check.yml       # lint + syntax check (PR trigger)
+│       └── ansible-deploy.yml      # run playbook against VM (manual trigger)
+├── terraform/
+│   ├── main.tf                     # LXD provider + VM resource (flat, no modules)
+│   ├── variables.tf                # All input variables
+│   ├── outputs.tf                  # VM name, IP, MAC, SSH command
+│   ├── cloud-init/
+│   │   └── user-data.yaml          # cloud-init template (ansible user, SSH hardening)
+│   └── env/
+│       ├── dev/
+│       │   ├── dev01.tfvars
+│       │   └── dev02.tfvars
+│       └── prod/
+│           ├── prod01.tfvars
+│           └── prod02.tfvars
+├── ansible/
+│   ├── inventory.yml               # Dynamic inventory via VM_IP env var
+│   ├── playbook.yml                # Entry playbook: common + docker roles
+│   └── roles/
+│       ├── common/
+│       │   └── tasks/main.yml      # apt cache + base packages
+│       └── docker/
+│           └── tasks/main.yml      # Docker CE install from upstream repo
+└── .gitignore
+```
+## Infrastructure Archtecture - GHA - terraform - ansible - LXD - seaweed (S3) - Org level secrets
 
-| Requirement | Notes |
-|---|---|
-| Ubuntu 24.04 host | LXD installed via snap, API at `https://localhost:8443` |
-| Gitea | Running at `http://gitea.local`, `Infra` org |
-| Gitea Act Runner | Docker-based runner registered to the `Infra` org |
-| Seaweed | S3-compatible state backend at `http://10.248.42.22:9000` |
-| Terraform ≥ 1.5 | Installed on the runner |
-| LXD TLS certificates | Client cert/key for runner-to-LXD authentication |
-
----
-
-## Quick Steps to Deploy a VM
-
-1. **Clone the repo and create a feature branch**
-   ```bash
-   git clone http://gitea.local/infra/local-workflows-ansible-roles-no-modules.git
-   cd local-workflows-ansible-roles-no-modules
-   git checkout -b <env><vm_name>   # e.g. dev dev02
-   ```
-
-2. **Create a new `.tfvars` file** under `terraform/env/<env>/` — copy an existing one and adjust resources as needed (image, cpu, memory, disk)
-
-3. **Run Terraform Check and Plan** via Gitea Actions — go to Actions → `Terraform Check` / `Terraform Plan`, select your feature branch, enter environment and VM name
-
-4. **Run Ansible Check** via Gitea Actions — go to Actions → `Ansible Check`, select your feature branch to lint and syntax-check the playbook
-
-5. **Open a PR and merge** to `main` — the Check workflows run automatically on the PR; merge once green
-
-6. **Run Terraform Apply** via Gitea Actions — go to Actions → `Terraform Apply`, select `main` branch, enter environment and VM name; the VM is created on LXD
-
-7. **Run Ansible Deploy** via Gitea Actions — go to Actions → `Ansible Deploy`, select `main` branch, enter environment and VM name; Ansible roles are applied to the live VM
-
-8. **Run Terraform Destroy** (when done) via Gitea Actions — go to Actions → `Terraform Destroy`, select `main` branch, enter environment, VM name, and type `yes` to confirm
-
----
-
-# VM deployment architecture - terraform - ansible - GHA runner - seaweed (S3) - Org level secrets
-
----
 ```
  Developer / GitHub Actions Runner
  ----main commands----
@@ -118,7 +115,7 @@ Terraform│ plan / apply              │Ansible-playbook
          |                           |       
          ▼                           |
  ┌─────────────────┐                 |               
- │      MinIO      │                 |
+ │      Seaweed    │                 |
  │    backend s3   │                 |
  │    (TF state)   │                 |
  └─────────────────┘                 |
@@ -141,50 +138,47 @@ Terraform│ plan / apply              │Ansible-playbook
 
 ```
 ---
+## Prerequisites
 
+| Requirement | Notes |
+|---|---|
+| Ubuntu 24.04 host | LXD installed via snap, API at `https://localhost:8443` |
+| Gitea | Running at `http://gitea.local`, `Infra` org |
+| Gitea Act Runner | Docker-based runner registered to the `Infra` org |
+| Seaweed | S3-compatible state backend at `http://10.248.42.22:9000` |
+| Terraform ≥ 1.5 | Installed on the runner |
+| LXD TLS certificates | Client cert/key for runner-to-LXD authentication |
+
+---
+
+## Quick Steps to Deploy a VM
+
+1. **Clone the repo and create a feature branch**
+   ```bash
+   git clone http://gitea.local/infra/local-workflows-ansible-roles-no-modules.git
+   cd local-workflows-ansible-roles-no-modules
+   git checkout -b <env><vm_name>   # e.g. dev dev02
+   ```
+
+2. **Create a new `.tfvars` file** under `terraform/env/<env>/` — copy an existing one and adjust resources as needed (image, cpu, memory, disk)
+
+3. **Run Terraform Check and Plan** via Gitea Actions — go to Actions → `Terraform Check` / `Terraform Plan`, select your feature branch, enter environment and VM name
+
+4. **Run Ansible Check** via Gitea Actions — go to Actions → `Ansible Check`, select your feature branch to lint and syntax-check the playbook
+
+5. **Open a PR and merge** to `main` — the Check workflows run automatically on the PR; merge once green
+
+6. **Run Terraform Apply** via Gitea Actions — go to Actions → `Terraform Apply`, select `main` branch, enter environment and VM name; the VM is created on LXD
+
+7. **Run Ansible Deploy** via Gitea Actions — go to Actions → `Ansible Deploy`, select `main` branch, enter environment and VM name; Ansible roles are applied to the live VM
+
+8. **Run Terraform Destroy** (when done) via Gitea Actions — go to Actions → `Terraform Destroy`, select `main` branch, enter environment, VM name, and type `yes` to confirm
+
+---
 **This repo is intentionally flat:**
 - Terraform resources live directly in `terraform/main.tf` — no `modules/` layer
 - Gitea Actions workflows are defined locally in `.gitea/workflows/` — not shared/reusable
 - Ansible uses local roles — no Ansible Galaxy or centralised role server
-
----
-
-## Repository Structure
-
-```
-.
-├── .gitea/
-│   └── workflows/
-│       ├── terraform-check.yml     # fmt + validate + tflint (PR trigger)
-│       ├── terraform-plan.yml      # plan only (manual trigger)
-│       ├── terraform-apply.yml     # apply (manual trigger)
-│       ├── terraform-destroy.yml   # destroy with confirmation gate (manual trigger)
-│       ├── ansible-check.yml       # lint + syntax check (PR trigger)
-│       └── ansible-deploy.yml      # run playbook against VM (manual trigger)
-├── terraform/
-│   ├── main.tf                     # LXD provider + VM resource (flat, no modules)
-│   ├── variables.tf                # All input variables
-│   ├── outputs.tf                  # VM name, IP, MAC, SSH command
-│   ├── cloud-init/
-│   │   └── user-data.yaml          # cloud-init template (ansible user, SSH hardening)
-│   └── env/
-│       ├── dev/
-│       │   ├── dev01.tfvars
-│       │   └── dev02.tfvars
-│       └── prod/
-│           ├── prod01.tfvars
-│           └── prod02.tfvars
-├── ansible/
-│   ├── inventory.yml               # Dynamic inventory via VM_IP env var
-│   ├── playbook.yml                # Entry playbook: common + docker roles
-│   └── roles/
-│       ├── common/
-│       │   └── tasks/main.yml      # apt cache + base packages
-│       └── docker/
-│           └── tasks/main.yml      # Docker CE install from upstream repo
-└── .gitignore
-```
-
 ---
 
 ## Secrets & Variables
