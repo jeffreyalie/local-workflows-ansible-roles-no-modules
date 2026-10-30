@@ -1,4 +1,14 @@
-#                             VM Deployment
+# Infrastructure Archtecture
+
+* Infrastructure Archtecture VM Deployment - GHA workflows - terraform modules - ansible roles / galaxy
+  - local GHA workflows - terraform modules (no) - ansible roles
+  - Infrastructure Archtecture VM Deployment - Gitea - Gitea runner - terraform - ansible - LXD - seaweed (S3)
+
+# Infrastructure Secrets Archtecture
+
+* Infrastructure Secrets Archtecture VM Deployment - Gitea - Gitea runner - terraform - ansible - LXD - seaweed (S3) [Org/Repo level secrets]
+
+## Summary
 
 Deploy Ubuntu 24.04 virtual machines on LXD via Terraform (flat, no modules), configure them with Ansible roles, all driven by local Gitea CI/CD workflows.
 
